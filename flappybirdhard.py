@@ -8,7 +8,7 @@ FPS = 32
 SCREENWIDTH = 289
 SCREENHEIGHT = 511
 SCREEN = pygame.display.set_mode((SCREENWIDTH, SCREENHEIGHT))
-GROUNDY = SCREENHEIGHT * 0.8
+GROUNDY = int(SCREENHEIGHT * 0.8)
 GAME_SPRITES = {}
 GAME_SOUNDS = {}
 PLAYER = 'bird.png'
@@ -37,18 +37,17 @@ def welcomeScreen():
                 sys.exit()
             elif event.type == KEYDOWN and (event.key == K_SPACE or event.key == K_UP):
                 return
-            else:
-                SCREEN.blit(GAME_SPRITES['background_day'], (0, 0))
-                SCREEN.blit(GAME_SPRITES['player'], (playerx, playery))
-                SCREEN.blit(GAME_SPRITES['message'], (messagex, messagey))
-                SCREEN.blit(GAME_SPRITES['base'], (basex, GROUNDY))
-                pygame.display.update()
-                FPSCLOCK.tick(FPS)
+        SCREEN.blit(GAME_SPRITES['background_day'], (0, 0))
+        SCREEN.blit(GAME_SPRITES['player'], (playerx, playery))
+        SCREEN.blit(GAME_SPRITES['message'], (messagex, messagey))
+        SCREEN.blit(GAME_SPRITES['base'], (basex, GROUNDY))
+        pygame.display.update()
+        FPSCLOCK.tick(FPS)
 
 def mainGame():
     score = 0
     playerx = int(SCREENWIDTH / 5)
-    playery = int(SCREENWIDTH / 2)
+    playery = int(SCREENHEIGHT / 2)  # Fixed from SCREENWIDTH to SCREENHEIGHT
     basex = 0
 
     newPipe1 = getRandomPipe(score)
@@ -68,8 +67,13 @@ def mainGame():
     playerFlapAccv = -8
     playerFlapped = False
 
+    is_day = True
+    fade_progress = 0
+    fade_speed = 0.02
+    transitioning = False
+
     while True:
-        # Set difficulty based on score
+        # Adjust pipe velocity and gravity with score but keep reasonable limits
         pipeVelX = -4 - (score // 10)
         gravity = 1 + (score // 20) * 0.2
         flapPower = playerFlapAccv + (score // 15) * 0.5
@@ -89,11 +93,21 @@ def mainGame():
             return
 
         playerMidPos = playerx + GAME_SPRITES['player'].get_width() / 2
-        for pipe in upperPipes:
+
+        # Scoring logic
+        for i in range(len(upperPipes)):
+            pipe = upperPipes[i]
             pipeMidPos = pipe['x'] + GAME_SPRITES['pipe'][0].get_width() / 2
-            if pipeMidPos <= playerMidPos < pipeMidPos + 4:
+
+            if 'scored' not in pipe and playerMidPos > pipeMidPos:
                 score += 1
+                upperPipes[i]['scored'] = True
                 safe_play('point')
+
+                if score % 10 == 0:
+                    is_day = not is_day
+                    transitioning = True
+                    fade_progress = 0
 
         if playerVelY < playerMaxVelY and not playerFlapped:
             playerVelY += gravity
@@ -103,26 +117,45 @@ def mainGame():
         playerHeight = GAME_SPRITES['player'].get_height()
         playery = playery + min(playerVelY, GROUNDY - playery - playerHeight)
 
+        # Move pipes to left
         for upperPipe, lowerPipe in zip(upperPipes, lowerPipes):
             upperPipe['x'] += pipeVelX
             lowerPipe['x'] += pipeVelX
 
-        if 0 < upperPipes[0]['x'] < 5:
+        # Add new pipe only when the rightmost pipe is past a threshold to keep spacing constant
+        # Instead of checking first pipe x near 0, check the last pipe's x to add new pipe
+        last_pipe_x = upperPipes[-1]['x']
+        pipe_gap = SCREENWIDTH / 2  # Constant horizontal gap between pipes
+
+        if last_pipe_x < SCREENWIDTH - pipe_gap:
             newpipe = getRandomPipe(score)
             upperPipes.append(newpipe[0])
             lowerPipes.append(newpipe[1])
 
+        # Remove pipes that have gone off screen
         if upperPipes[0]['x'] < -GAME_SPRITES['pipe'][0].get_width():
             upperPipes.pop(0)
             lowerPipes.pop(0)
 
-        # Alternate background
-        if (score // 10) % 2 == 0:
-            background = GAME_SPRITES['background_day']
-        else:
-            background = GAME_SPRITES['background_night']
+        # Handle day/night background fade
+        if transitioning:
+            fade_progress += fade_speed
+            if fade_progress >= 1:
+                fade_progress = 1
+                transitioning = False
 
-        SCREEN.blit(background, (0, 0))
+            from_bg = GAME_SPRITES['background_day'] if not is_day else GAME_SPRITES['background_night']
+            to_bg = GAME_SPRITES['background_night'] if not is_day else GAME_SPRITES['background_day']
+
+            SCREEN.blit(from_bg, (0, 0))
+            overlay = to_bg.copy()
+            overlay.set_alpha(int(fade_progress * 255))
+            SCREEN.blit(overlay, (0, 0))
+        else:
+            background = GAME_SPRITES['background_day'] if is_day else GAME_SPRITES['background_night']
+            SCREEN.blit(background, (0, 0))
+
+        # Draw pipes
         for upperPipe, lowerPipe in zip(upperPipes, lowerPipes):
             SCREEN.blit(GAME_SPRITES['pipe'][0], (upperPipe['x'], upperPipe['y']))
             SCREEN.blit(GAME_SPRITES['pipe'][1], (lowerPipe['x'], lowerPipe['y']))
@@ -130,6 +163,7 @@ def mainGame():
         SCREEN.blit(GAME_SPRITES['base'], (basex, GROUNDY))
         SCREEN.blit(GAME_SPRITES['player'], (playerx, playery))
 
+        # Draw score
         myDigits = [int(x) for x in list(str(score))]
         width = sum(GAME_SPRITES['numbers'][digit].get_width() for digit in myDigits)
         Xoffset = (SCREENWIDTH - width) / 2
@@ -143,7 +177,7 @@ def mainGame():
 
 def showGameOver():
     SCREEN.blit(GAME_SPRITES['gameover'],
-                ((SCREENWIDTH - GAME_SPRITES['gameover'].get_width()) // 2, SCREENHEIGHT * 0.25))
+                ((SCREENWIDTH - GAME_SPRITES['gameover'].get_width()) // 2, int(SCREENHEIGHT * 0.25)))
     pygame.display.update()
     pygame.time.delay(1500)
 
@@ -152,16 +186,21 @@ def isCollide(playerx, playery, upperPipes, lowerPipes):
         safe_play('hit')
         return True
 
+    playerWidth = GAME_SPRITES['player'].get_width()
+    playerHeight = GAME_SPRITES['player'].get_height()
+
     for pipe in upperPipes:
         pipeHeight = GAME_SPRITES['pipe'][0].get_height()
+        pipeWidth = GAME_SPRITES['pipe'][0].get_width()
         if (playery < pipeHeight + pipe['y'] and
-                abs(playerx - pipe['x']) < GAME_SPRITES['pipe'][0].get_width()):
+                playerx + playerWidth > pipe['x'] and playerx < pipe['x'] + pipeWidth):
             safe_play('hit')
             return True
 
     for pipe in lowerPipes:
-        if (playery + GAME_SPRITES['player'].get_height() > pipe['y'] and
-                abs(playerx - pipe['x']) < GAME_SPRITES['pipe'][0].get_width()):
+        pipeWidth = GAME_SPRITES['pipe'][0].get_width()
+        if (playery + playerHeight > pipe['y'] and
+                playerx + playerWidth > pipe['x'] and playerx < pipe['x'] + pipeWidth):
             safe_play('hit')
             return True
 
@@ -170,7 +209,14 @@ def isCollide(playerx, playery, upperPipes, lowerPipes):
 def getRandomPipe(score=0):
     pipeHeight = GAME_SPRITES['pipe'][0].get_height()
     baseHeight = GAME_SPRITES['base'].get_height()
-    offset = SCREENHEIGHT / (3 + score // 20)  # gap decreases as score increases
+    
+    # Avoid too small offset to prevent pipe overlapping or crashes
+    # Clamp offset between min and max values
+    min_offset = 80
+    max_offset = 150
+    calculated_offset = SCREENHEIGHT / (3 + score // 20)
+    offset = max(min(calculated_offset, max_offset), min_offset)
+    
     y2 = offset + random.randrange(0, int(SCREENHEIGHT - baseHeight - 1.2 * offset))
     pipeX = SCREENWIDTH + 10
     y1 = pipeHeight - y2 + offset
