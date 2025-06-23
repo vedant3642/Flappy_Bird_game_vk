@@ -8,11 +8,9 @@ It's a great hands-on project to learn the basics of **game development**, inclu
 
 ## 🎮 Game Previews
 
-### Classic Flappy Bird Gameplay
-![Classic Flappy Bird Gameplay](images/classic_flappy.gif)
+### Flappy Bird Gameplay
 
-### Hard Mode with Day/Night Cycle
-![Hard Mode Preview](images/hard_mode.gif)
+![flappy-bird-game](https://github.com/user-attachments/assets/b242b42e-bd78-492f-a5ce-ac883c4e239d)
 
 
 ---
