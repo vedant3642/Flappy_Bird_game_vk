@@ -1,4 +1,4 @@
-# 🐤 Flappy Bird Game - VK Edition
+# 🐤 Flappy Bird Game 
 
 A fun and beginner-friendly **Flappy Bird clone** built with **Python** and **Pygame**. This project recreates the iconic side-scrolling arcade game where you guide the bird through pipes without crashing!
 
